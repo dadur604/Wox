@@ -36,12 +36,12 @@
                             <converter:MultilineTextConverter x:Key="MultilineTextConverter"/>
                         </Grid.Resources>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="25" />
                             <ColumnDefinition />
                             <ColumnDefinition Width="0" />
                         </Grid.ColumnDefinitions>
-                        <Image x:Name="imgIco" Width="32" Height="32" HorizontalAlignment="Left"
-                               Source="{Binding Image.Value}" />
+                        <Image x:Name="imgIco" Width="25" Height="25" HorizontalAlignment="Center"
+                               Source="{Binding Image.Value}" VerticalAlignment="Center" />
                         <Grid Margin="5 0 5 0" Grid.Column="1" HorizontalAlignment="Stretch">
                             <Grid.RowDefinitions>
                                 <RowDefinition />
@@ -89,7 +89,7 @@
         <Style TargetType="{x:Type ListBoxItem}">
             <EventSetter Event="MouseEnter" Handler="OnMouseEnter" />
             <EventSetter Event="MouseMove" Handler="OnMouseMove" />
-            <Setter Property="Height" Value="50" />
+            <Setter Property="Height" Value="35" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="BorderThickness" Value="0" />
