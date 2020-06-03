@@ -1,16 +1,18 @@
 ﻿using System;
+using System.Windows.Forms;
 using System.Windows.Media;
 using System.Windows.Threading;
 using NLog;
+
+using Wox.Image;
 using Wox.Infrastructure;
-using Wox.Infrastructure.Image;
 using Wox.Infrastructure.Logger;
 using Wox.Plugin;
 
 
 namespace Wox.ViewModel
 {
-    public class ResultViewModel
+    public class ResultViewModel : BaseModel
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
@@ -19,7 +21,8 @@ namespace Wox.ViewModel
             if (result != null)
             {
                 Result = result;
-                Image = new Lazy<ImageSource>(() => {
+                Image = new Lazy<ImageSource>(() =>
+                {
                     return SetImage(result);
                 });
             }
@@ -30,19 +33,41 @@ namespace Wox.ViewModel
             string imagePath = result.IcoPath;
             if (string.IsNullOrEmpty(imagePath) && result.Icon != null)
             {
+                var r = result;
                 try
                 {
-                    return result.Icon();
+                    return r.Icon();
                 }
                 catch (Exception e)
                 {
-                    Logger.WoxError($"IcoPath is empty and exception when calling Icon() for result <{Result.Title}> of plugin <{Result.PluginDirectory}>", e);
-                    imagePath = Constant.ErrorIcon;
+                    e.Data.Add(nameof(result.Title), result.Title);
+                    e.Data.Add(nameof(result.PluginID), result.PluginID);
+                    e.Data.Add(nameof(result.PluginDirectory), result.PluginDirectory);
+                    e.Data.Add(nameof(result.IcoPath), result.IcoPath);
+                    Logger.WoxError($"IcoPath is empty and exception when calling Icon() for result <{r.Title}> of plugin <{r.PluginDirectory}>", e);
+                    return ImageLoader.GetErrorImage();
                 }
             }
+            try
+            {
+                // will get here either when icoPath has value\icon delegate is null\when had exception in delegate
+                return ImageLoader.Load(imagePath, UpdateImageCallback, result.Title, result.PluginID, result.PluginDirectory);
+            }
+            catch (Exception e)
+            {
+                e.Data.Add(nameof(result.Title), result.Title);
+                e.Data.Add(nameof(result.PluginID), result.PluginID);
+                e.Data.Add(nameof(result.PluginDirectory), result.PluginDirectory);
+                e.Data.Add(nameof(result.IcoPath), result.IcoPath);
+                Logger.WoxError($"Cannot read image {result.IcoPath}", e);
+                return ImageLoader.GetErrorImage();
+            }
+        }
 
-            // will get here either when icoPath has value\icon delegate is null\when had exception in delegate
-            return ImageLoader.Load(imagePath);
+        public void UpdateImageCallback(ImageSource image)
+        {
+            Image = new Lazy<ImageSource>(() => image);
+            OnPropertyChanged(nameof(Image));
         }
 
         // directly binding will cause unnecessory image load

@@ -6,7 +6,7 @@ WoX
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/Wox-launcher/wox?include_prereleases)](https://github.com/Wox-launcher/Wox/releases)
 ![GitHub Release Date](https://img.shields.io/github/release-date-pre/Wox-launcher/wox?nclude_prereleases)
 [![Github All Releases](https://img.shields.io/github/downloads/Wox-launcher/Wox/total.svg)](https://github.com/Wox-launcher/Wox/releases)
-![Github commit activity](https://img.shields.io/github/commit-activity/w/Wox-launcher/Wox)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/wox-launcher/wox)
 
 **WoX** is a launcher for Windows that simply works. It's an alternative to [Alfred](https://www.alfredapp.com/) and [Launchy](http://www.launchy.net/).
 
@@ -30,17 +30,17 @@ Features
 Installation
 ------------
 
-Download `Wox-xxx.exe` from [releases](https://github.com/Wox-launcher/Wox/releases).
-
-Windows may complain about security due to code not being signed. This will be fixed later. 
+- Download from [releases](https://github.com/Wox-launcher/Wox/releases).
+  - Option 1: download `Wox-Full-Installer.*.exe`, which include all dependency.
+  - Option 2: download `Wox.*.exe`, which only include wox itself. You may install Everything and Python using below instruction.
+- Windows may complain about security due to code not being signed. This will be fixed later. 
 
 - Requirements:
   - .NET >= 4.6.2 or Windows version >= 10 1607 (Anniversary Update)
   - [Optional] Integrate with everything
     1. Download `.exe` [installer](https://www.voidtools.com/)
-    2. "Install Everything Service" is checked
-    3. Use x64 if your windows is x64
-    4. Version >= 1.3.4.686 is supported
+    2. Use x64 if your windows is x64
+    3. Version >= 1.4.1 is supported
   - [Optional] Use Python plugins
     1. install [python3](https://www.python.org/downloads/)
     2. add it to `%PATH%` or set it in WoX settings
@@ -72,3 +72,11 @@ Documentation
 - [Wiki](https://github.com/Wox-launcher/Wox/wiki)
 - Outdated doc: [WoX doc](http://doc.wox.one).
 - Just ask questions in [issues](https://github.com/Wox-launcher/Wox/issues) for now.
+
+Thanks
+------
+
+I would like to thank
+
+- [Raygun](https://raygun.com/) for their free crash reporting account.
+- JetBrains for Open Source licence.

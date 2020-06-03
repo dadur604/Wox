@@ -12,7 +12,7 @@ using Wox.Core.Resource;
 using Wox.Helper;
 using Wox.Infrastructure;
 using Wox.Infrastructure.Hotkey;
-using Wox.Infrastructure.Image;
+using Wox.Image;
 using Wox.Plugin;
 using Wox.ViewModel;
 
@@ -22,15 +22,13 @@ namespace Wox
     {
         private readonly SettingWindowViewModel _settingsVM;
         private readonly MainViewModel _mainVM;
-        private readonly Alphabet _alphabet;
 
         #region Constructor
 
-        public PublicAPIInstance(SettingWindowViewModel settingsVM, MainViewModel mainVM, Alphabet alphabet)
+        public PublicAPIInstance(SettingWindowViewModel settingsVM, MainViewModel mainVM)
         {
             _settingsVM = settingsVM;
             _mainVM = mainVM;
-            _alphabet = alphabet;
             GlobalHotkey.Instance.hookedKeyboardCallback += KListener_hookedKeyboardCallback;
             WebRequest.RegisterPrefix("data", new DataWebRequestFactory());
         }
@@ -77,8 +75,6 @@ namespace Wox
             _mainVM.Save();
             _settingsVM.Save();
             PluginManager.Save();
-            ImageLoader.Save();
-            _alphabet.Save();
         }
 
         public void ReloadAllPluginData()
@@ -147,7 +143,7 @@ namespace Wox
 
         public event WoxGlobalKeyboardEventHandler GlobalKeyboardEvent;
 
-        [Obsolete("This will be removed in Wox 1.3")]
+        [Obsolete("This will be removed in Wox 1.4")]
         public void PushResults(Query query, PluginMetadata plugin, List<Result> results)
         {
             results.ForEach(o =>

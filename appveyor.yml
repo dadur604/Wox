@@ -1,4 +1,4 @@
-version: 1.3.{build}
+version: 1.4.{build}
 image: Visual Studio 2019
 configuration: Release
 assembly_info:
@@ -26,3 +26,8 @@ artifacts:
   - path: 'Output\Packages\Wox-*.*'
     name: installer
   - path: 'Output\Packages\RELEASES'
+    name: installer
+  - path: 'Wox.Installer\Everything*.exe'
+    name: installer
+  - path: 'Wox.Installer\python*.exe'
+    name: installer

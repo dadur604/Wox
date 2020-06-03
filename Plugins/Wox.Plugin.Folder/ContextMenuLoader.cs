@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System.Windows;
 using NLog;
 using Wox.Infrastructure.Logger;
-using Wox.Infrastructure.Image;
 using Wox.Infrastructure;
 
 namespace Wox.Plugin.Folder
@@ -125,7 +124,7 @@ namespace Wox.Plugin.Folder
 
                             return true;
                         },
-                        IcoPath = "Images/user.png"
+                        IcoPath = "Images/app.png"
                     });
             }
 

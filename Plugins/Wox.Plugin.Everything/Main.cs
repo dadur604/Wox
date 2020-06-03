@@ -20,7 +20,7 @@ namespace Wox.Plugin.Everything
     {
 
         public const string DLL = "Everything.dll";
-        private readonly IEverythingApi _api = new EverythingApi();
+        private readonly EverythingApi _api = new EverythingApi();
 
 
 
@@ -28,7 +28,7 @@ namespace Wox.Plugin.Everything
 
         private Settings _settings;
         private PluginJsonStorage<Settings> _storage;
-        private CancellationTokenSource _cancellationTokenSource;
+        private CancellationTokenSource _updateSource;
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
         public void Save()
@@ -38,8 +38,16 @@ namespace Wox.Plugin.Everything
 
         public List<Result> Query(Query query)
         {
-            _cancellationTokenSource?.Cancel(); // cancel if already exist
-            var cts = _cancellationTokenSource = new CancellationTokenSource();
+            if (_updateSource != null && !_updateSource.IsCancellationRequested)
+            {
+                _updateSource.Cancel();
+                Logger.WoxDebug($"cancel init {_updateSource.Token.GetHashCode()} {Thread.CurrentThread.ManagedThreadId} {query.RawQuery}");
+                _updateSource.Dispose();
+            }
+            var source = new CancellationTokenSource();
+            _updateSource = source;
+            var token = source.Token;
+
             var results = new List<Result>();
             if (!string.IsNullOrEmpty(query.Search))
             {
@@ -47,14 +55,12 @@ namespace Wox.Plugin.Everything
 
                 try
                 {
-                    var searchList = _api.Search(keyword, cts.Token, maxCount: _settings.MaxSearchCount);
-                    if (searchList == null)
-                    {
-                        return results;
-                    }
-
+                    if (token.IsCancellationRequested) { return results; }
+                    var searchList = _api.Search(keyword, token, _settings.MaxSearchCount);
+                    if (token.IsCancellationRequested) { return results; }
                     for (int i = 0; i < searchList.Count; i++)
                     {
+                        if (token.IsCancellationRequested) { return results; }
                         SearchResult searchResult = searchList[i];
                         var r = CreateResult(keyword, searchResult, i);
                         results.Add(r);
@@ -99,11 +105,12 @@ namespace Wox.Plugin.Everything
 
             var r = new Result
             {
-                Title = Path.GetFileName(path),
                 Score = _settings.MaxSearchCount - index,
-                SubTitle = path,
-                IcoPath = path,
-                TitleHighlightData = StringMatcher.FuzzySearch(keyword, Path.GetFileName(path)).MatchData,
+                Title = searchResult.FileName,
+                TitleHighlightData = searchResult.FileNameHightData,
+                SubTitle = searchResult.FullPath,
+                SubTitleHighlightData = searchResult.FullPathHightData,
+                IcoPath = searchResult.FullPath,
                 Action = c =>
                 {
                     bool hide;
@@ -128,7 +135,7 @@ namespace Wox.Plugin.Everything
                     return hide;
                 },
                 ContextData = searchResult,
-                SubTitleHighlightData = StringMatcher.FuzzySearch(keyword, path).MatchData
+                
             };
             return r;
         }
@@ -177,7 +184,7 @@ namespace Wox.Plugin.Everything
             const string sdk = "EverythingSDK";
             var sdkDirectory = Path.Combine(pluginDirectory, sdk, CpuType());
             var sdkPath = Path.Combine(sdkDirectory, DLL);
-            Logger.WoxDebug("Everything", $"sdk path {sdkPath}");
+            Logger.WoxDebug($"sdk path <{sdkPath}>");
             Constant.EverythingSDKPath = sdkPath;
             _api.Load(sdkPath);
         }

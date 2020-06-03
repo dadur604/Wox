@@ -12,6 +12,7 @@ using NLog;
 using Wox.Infrastructure;
 using Wox.Infrastructure.Logger;
 using Microsoft.WindowsAPICodePack.Shell;
+using Windows.ApplicationModel.Resources;
 
 namespace Wox.Plugin.Program.Programs
 {
@@ -23,39 +24,18 @@ namespace Wox.Plugin.Program.Programs
         public string FullPath { get; set; }
         public string ParentDirectory { get; set; }
         public string ExecutableName { get; set; }
-        public string Description { get; set; }
         public bool Valid { get; set; }
         public bool Enabled { get; set; }
         public string Location => ParentDirectory;
 
-        private const string ShortcutExtension = "lnk";
-        private const string ApplicationReferenceExtension = "appref-ms";
-        private const string ExeExtension = "exe";
-
         private static readonly NLog.Logger Logger = LogManager.GetCurrentClassLogger();
-        private int Score(string query)
-        {
-            var nameMatch = StringMatcher.FuzzySearch(query, Name);
-            var descriptionMatch = StringMatcher.FuzzySearch(query, Description);
-            var executableNameMatch = StringMatcher.FuzzySearch(query, ExecutableName);
-            var score = new[] { nameMatch.Score, descriptionMatch.Score, executableNameMatch.Score }.Max();
-            return score;
-        }
-
 
         public Result Result(string query, IPublicAPI api)
         {
-            var score = Score(query);
-            if (score <= 0)
-            { // no need to create result if this is zero
-                return null;
-            }
-
             var result = new Result
             {
                 SubTitle = FullPath,
                 IcoPath = IcoPath,
-                Score = score,
                 ContextData = this,
                 Action = e =>
                 {
@@ -65,29 +45,19 @@ namespace Wox.Plugin.Program.Programs
                         WorkingDirectory = ParentDirectory
                     };
 
-                    Main.StartProcess(Process.Start, info);
+                    if (e.SpecialKeyState.CtrlPressed)
+                        Main.StartProcess(Process.Start, ShellCommand.SetProcessStartInfo(info.FileName, info.WorkingDirectory, "", "runas"));
+                    else
+                        Main.StartProcess(Process.Start, info);
 
                     return true;
                 }
             };
 
-            if (Description.Length >= Name.Length &&
-                Description.Substring(0, Name.Length) == Name)
-            {
-                result.Title = Description;
-                result.TitleHighlightData = StringMatcher.FuzzySearch(query, Description).MatchData;
-            }
-            else if (!string.IsNullOrEmpty(Description))
-            {
-                var title = $"{Name}: {Description}";
-                result.Title = title;
-                result.TitleHighlightData = StringMatcher.FuzzySearch(query, title).MatchData;
-            }
-            else
-            {
-                result.Title = Name;
-                result.TitleHighlightData = StringMatcher.FuzzySearch(query, Name).MatchData;
-            }
+            var match = StringMatcher.FuzzySearch(query, Name);
+            result.Title = Name;
+            result.Score = match.Score;
+            result.TitleHighlightData = match.MatchData;
 
             return result;
         }
@@ -108,7 +78,7 @@ namespace Wox.Plugin.Program.Programs
 
                         return true;
                     },
-                    IcoPath = "Images/user.png"
+                    IcoPath = "Images/app.png"
                 },
                 new Result
                 {
@@ -160,7 +130,6 @@ namespace Wox.Plugin.Program.Programs
                     IcoPath = path,
                     FullPath = path,
                     ParentDirectory = Directory.GetParent(path).FullName,
-                    Description = string.Empty,
                     Valid = true,
                     Enabled = true
                 };
@@ -172,85 +141,37 @@ namespace Wox.Plugin.Program.Programs
                 return new Win32() { Valid = false, Enabled = false };
             }
         }
-        // todo lnk.resolve has been removed, need test to get description and image for lnk only instead of target
-        private static Win32 LnkProgram(string path)
-        {
-            var program = Win32Program(path);
-            // need manually cast, no direct api from Windows-API-Code-Pack
-            var link = (ShellLink)ShellObject.FromParsingName(path);
-            program.Name = link.Name;
-            program.ExecutableName = link.Path;
-            var comments = link.Comments;
-            if (string.IsNullOrWhiteSpace(comments))
-            {
-                program.Description = string.Empty;
-            }
-            else
-            {
-                program.Description = comments;
-            }
-            return program;
-        }
-
-        private static Win32 ExeProgram(string path)
-        {
-            try
-            {
-                var program = Win32Program(path);
-                var info = FileVersionInfo.GetVersionInfo(path);
-                if (!string.IsNullOrEmpty(info.FileDescription))
-                {
-                    program.Description = info.FileDescription;
-                }
-                return program;
-            }
-            catch (Exception e) when (e is SecurityException || e is UnauthorizedAccessException)
-            {
-
-                Logger.WoxError($"Permission denied {path}");
-                return new Win32() { Valid = false, Enabled = false };
-            }
-        }
 
         private static IEnumerable<string> ProgramPaths(string directory, string[] suffixes)
         {
             if (!Directory.Exists(directory))
                 return new string[] { };
-            var files = new List<string>();
-            var folderQueue = new Queue<string>();
-            folderQueue.Enqueue(directory);
-            do
+            var paths = new List<string>();
+            try
             {
-                var currentDirectory = folderQueue.Dequeue();
-                try
+                IEnumerable<string> files = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories);
+                foreach (var path in files)
                 {
-                    foreach (var suffix in suffixes)
+                    var extension = Path.GetExtension(path);
+                    if (extension.Length > 1)
                     {
-                        files.AddRange(Directory.EnumerateFiles(currentDirectory, $"*.{suffix}", SearchOption.TopDirectoryOnly));
+                        if (suffixes.Contains(extension.Substring(1)))
+                        {
+                            paths.Add(path);
+                        }
                     }
                 }
-                catch (Exception e) when (e is SecurityException || e is UnauthorizedAccessException)
-                {
-                    Logger.WoxError($"Permission denied {currentDirectory}");
-                }
-                catch (DirectoryNotFoundException)
-                {
-                    Logger.WoxError($"Directory not found {currentDirectory}");
-                }
+            }
+            catch (Exception e) when (e is SecurityException || e is UnauthorizedAccessException)
+            {
+                Logger.WoxError($"Permission denied {directory}");
+            }
+            catch (DirectoryNotFoundException)
+            {
+                Logger.WoxError($"Directory not found {directory}");
+            }
 
-                try
-                {
-                    foreach (var childDirectory in Directory.EnumerateDirectories(currentDirectory, "*", SearchOption.TopDirectoryOnly))
-                    {
-                        folderQueue.Enqueue(childDirectory);
-                    }
-                }
-                catch (Exception e) when (e is SecurityException || e is UnauthorizedAccessException)
-                {
-                    Logger.WoxError($"Permission denied {currentDirectory}");
-                }
-            } while (folderQueue.Any());
-            return files;
+            return paths;
         }
 
         private static string Extension(string path)
@@ -266,37 +187,26 @@ namespace Wox.Plugin.Program.Programs
             }
         }
 
-        private static ParallelQuery<Win32> UnregisteredPrograms(List<Settings.ProgramSource> sources, string[] suffixes)
+        private static ParallelQuery<Win32> UnregisteredPrograms(List<ProgramSource> sources, string[] suffixes)
         {
-            var paths = sources.Where(s => Directory.Exists(s.Location))
-                .SelectMany(s => ProgramPaths(s.Location, suffixes))
-                .Distinct();
+            var paths = sources.Where(s => Directory.Exists(s.Location)).SelectMany(s => ProgramPaths(s.Location, suffixes));
 
-            var programs1 = paths.AsParallel().Where(p => Extension(p) == ExeExtension).Select(ExeProgram);
-            var programs2 = paths.AsParallel().Where(p => Extension(p) == ShortcutExtension).Select(LnkProgram);
-            var programs3 = from p in paths.AsParallel()
-                            let e = Extension(p)
-                            where e != ShortcutExtension && e != ExeExtension
-                            select Win32Program(p);
-            return programs1.Concat(programs2).Concat(programs3);
+            var programs = paths.AsParallel().Select(Win32Program);
+            return programs;
         }
 
         private static ParallelQuery<Win32> StartMenuPrograms(string[] suffixes)
         {
             var directory1 = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+            // some program is not inside program directory, e.g. docker desktop
+            directory1 = Directory.GetParent(directory1).FullName;
             var directory2 = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
+            directory2 = Directory.GetParent(directory2).FullName;
             var paths1 = ProgramPaths(directory1, suffixes);
             var paths2 = ProgramPaths(directory2, suffixes);
+            var paths = paths1.Concat(paths2);
 
-            var toFilter = paths1.Concat(paths2);
-            var paths = toFilter
-                        .Select(t1 => t1)
-                        .Distinct()
-                        .ToArray();
-
-            var programs1 = paths.AsParallel().Where(p => Extension(p) == ShortcutExtension).Select(LnkProgram);
-            var programs2 = paths.AsParallel().Where(p => Extension(p) == ApplicationReferenceExtension).Select(Win32Program);
-            var programs = programs1.Concat(programs2).Where(p => p.Valid);
+            var programs = paths.AsParallel().Select(Win32Program);
             return programs;
         }
 

@@ -3,13 +3,23 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Windows;
 using System.Xml;
 using Microsoft.Win32;
+using Wox.Infrastructure.UserSettings;
 
 namespace Wox.Infrastructure.Exception
 {
     public class ExceptionFormatter
     {
+        private static string _systemLanguage;
+        private static string _woxLanguage;
+        public static void Initialize(string systemLanguage, string woxLanguage)
+        {
+            _systemLanguage = systemLanguage;
+            _woxLanguage = woxLanguage;
+        }
         public static string FormattedException(System.Exception ex)
         {
             return FormattedAllExceptions(ex).ToString();
@@ -53,6 +63,16 @@ namespace Wox.Infrastructure.Exception
             sb.Append(Indent(indentLevel));
             sb.Append("HResult: ");
             sb.AppendLine(ex.HResult.ToString());
+            foreach(object key in ex.Data.Keys)
+            {
+                object value = ex.Data[key];
+                sb.Append(Indent(indentLevel));
+                sb.Append("Data: <");
+                sb.Append(key);
+                sb.Append("> -> <");
+                sb.Append(value);
+                sb.AppendLine(">");
+            }
 
             if (ex.Source != null)
             {
@@ -122,10 +142,14 @@ namespace Wox.Infrastructure.Exception
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("## Runtime Info");
             sb.AppendLine($"* Command Line: {Environment.CommandLine}");
+            sb.AppendLine($"* Portable Mode: {DataLocation.PortableDataLocationInUse()}");
             sb.AppendLine($"* Timestamp: {DateTime.Now.ToString(CultureInfo.InvariantCulture)}");
             sb.AppendLine($"* Wox version: {Constant.Version}");
             sb.AppendLine($"* OS Version: {Environment.OSVersion.VersionString}");
-            sb.AppendLine($"* x64: {Environment.Is64BitOperatingSystem}");
+            sb.AppendLine($"* x64 OS: {Environment.Is64BitOperatingSystem}");
+            sb.AppendLine($"* x64 Process: {Environment.Is64BitProcess}");
+            sb.AppendLine($"* System Language: {_systemLanguage}");
+            sb.AppendLine($"* Wox Language: {_woxLanguage}");
             sb.AppendLine($"* CLR Version: {Environment.Version}");
             sb.AppendLine($"* Installed .NET Framework: ");
             foreach (var result in GetFrameworkVersionFromRegistry())
@@ -146,9 +170,11 @@ namespace Wox.Infrastructure.Exception
             return sb.ToString();
         }
 
-        public static string ExceptionWithRuntimeInfo(System.Exception ex)
+        public static string ExceptionWithRuntimeInfo(System.Exception ex, string id)
         {
             StringBuilder sb = new StringBuilder();
+            sb.Append("Error id: ");
+            sb.AppendLine(id);
             var formatted = FormattedAllExceptions(ex);
             sb.Append(formatted);
             var info = RuntimeInfoFull();

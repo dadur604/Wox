@@ -6,7 +6,7 @@ using Wox.Core;
 using Wox.Core.Configuration;
 using Wox.Core.Plugin;
 using Wox.Infrastructure;
-using Wox.Infrastructure.Image;
+using Wox.Image;
 using Wox.Infrastructure.UserSettings;
 using Wox.Plugin;
 using Wox.ViewModel;
@@ -21,24 +21,19 @@ namespace Wox.Test
         {
             // todo remove i18n from application / ui, so it can be tested in a modular way
             new App();
-
-            Constant.Initialize();
+            Settings.Initialize();
             ImageLoader.Initialize();
 
-            Updater updater = new Updater("");
             Portable portable = new Portable();
-            SettingWindowViewModel settingsVm = new SettingWindowViewModel(updater, portable);
-            Settings settings = settingsVm.Settings;
+            SettingWindowViewModel settingsVm = new SettingWindowViewModel(portable);
 
-            Alphabet alphabet = new Alphabet();
-            alphabet.Initialize(settings);
-            StringMatcher stringMatcher = new StringMatcher(alphabet);
+            StringMatcher stringMatcher = new StringMatcher();
             StringMatcher.Instance = stringMatcher;
-            stringMatcher.UserSettingSearchPrecision = settings.QuerySearchPrecision;
+            stringMatcher.UserSettingSearchPrecision = Settings.Instance.QuerySearchPrecision;
 
-            PluginManager.LoadPlugins(settings.PluginSettings);
-            MainViewModel mainVm = new MainViewModel(settings, false);
-            PublicAPIInstance api = new PublicAPIInstance(settingsVm, mainVm, alphabet);
+            PluginManager.LoadPlugins(Settings.Instance.PluginSettings);
+            MainViewModel mainVm = new MainViewModel(false);
+            PublicAPIInstance api = new PublicAPIInstance(settingsVm, mainVm);
             PluginManager.InitializePlugins(api);
 
         }
@@ -49,7 +44,7 @@ namespace Wox.Test
         {
             
             Query query = QueryBuilder.Build(QueryText.Trim(), PluginManager.NonGlobalPlugins);
-            List<PluginPair> plugins = PluginManager.ValidPluginsForQuery(query);
+            List<PluginPair> plugins = PluginManager.AllPlugins;
             Result result = plugins.SelectMany(
                     p => PluginManager.QueryForPlugin(p, query)
                 )

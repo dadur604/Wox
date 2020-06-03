@@ -1,8 +1,10 @@
+using Microsoft.WindowsAPICodePack.Shell.Interop;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -23,14 +25,13 @@ namespace Wox.ViewModel
     {
         private readonly Updater _updater;
         private readonly IPortable _portable;
-        private readonly WoxJsonStorage<Settings> _storage;
 
-        public SettingWindowViewModel(Updater updater, IPortable portable)
+        public SettingWindowViewModel(IPortable portable)
         {
-            _updater = updater;
+
+            _updater = new Updater(Wox.Properties.Settings.Default.GithubRepo); ;
             _portable = portable;
-            _storage = new WoxJsonStorage<Settings>();
-            Settings = _storage.Load();
+            Settings = Settings.Instance;
             Settings.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(Settings.ActivateTimes))
@@ -38,13 +39,21 @@ namespace Wox.ViewModel
                     OnPropertyChanged(nameof(ActivatedTimes));
                 }
             };
+            AutoUpdates();
         }
 
         public Settings Settings { get; set; }
 
         public async void UpdateApp()
         {
-            await _updater.UpdateApp(false);
+            if (PortableMode)
+            {
+                MessageBox.Show("Portable mode need check update manually in https://github.com/Wox-launcher/Wox/releases");
+            }
+            else
+            {
+                await _updater.UpdateApp(false, Settings.UpdateToPrereleases);
+            }
         }
 
         // This is only required to set at startup. When portable mode enabled/disabled a restart is always required
@@ -68,9 +77,31 @@ namespace Wox.ViewModel
             }
         }
 
+        private void AutoUpdates()
+        {
+            Task.Run(async () =>
+            {
+                if (Settings.Instance.AutoUpdates && !PortableMode)
+                {
+                    // check udpate every 5 hours
+                    var timer = new System.Timers.Timer(1000 * 60 * 60 * 5);
+                    timer.Elapsed += async (s, e) =>
+                    {
+                        await _updater.UpdateApp(true, Settings.Instance.UpdateToPrereleases);
+                    };
+                    timer.Start();
+
+                    // check updates on startup
+                    await _updater.UpdateApp(true, Settings.Instance.UpdateToPrereleases);
+                }
+            }).ContinueWith(ErrorReporting.UnhandledExceptionHandleTask, TaskContinuationOptions.OnlyOnFaulted);
+        }
+
+
+
         public void Save()
         {
-            _storage.Save();
+            Settings.Save();
         }
 
         #region general
@@ -115,11 +146,11 @@ namespace Wox.ViewModel
 
         public bool ShouldUsePinyin
         {
-            get 
+            get
             {
-                return Settings.ShouldUsePinyin;            
+                return Settings.ShouldUsePinyin;
             }
-            set 
+            set
             {
                 Settings.ShouldUsePinyin = value;
             }
@@ -157,7 +188,7 @@ namespace Wox.ViewModel
             }
 
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(_updater.GitHubRepository);
-            
+
             if (string.IsNullOrEmpty(proxyUserName) || string.IsNullOrEmpty(Settings.Proxy.Password))
             {
                 request.Proxy = new WebProxy(proxyServer, Settings.Proxy.Port);
@@ -201,7 +232,7 @@ namespace Wox.ViewModel
                 var metadatas = PluginManager.AllPlugins
                     .OrderBy(x => x.Metadata.Disabled)
                     .ThenBy(y => y.Metadata.Name)
-                    .Select(p => new PluginViewModel { PluginPair = p})
+                    .Select(p => new PluginViewModel { PluginPair = p })
                     .ToList();
                 return metadatas;
             }
@@ -442,7 +473,7 @@ namespace Wox.ViewModel
         #region about
 
         public string Github => _updater.GitHubRepository;
-        public string ReleaseNotes => _updater.GitHubRepository +  @"/releases/latest";
+        public string ReleaseNotes => _updater.GitHubRepository + @"/releases/latest";
         public static string Version => Constant.Version;
         public string ActivatedTimes => string.Format(_translater.GetTranslation("about_activate_times"), Settings.ActivateTimes);
         #endregion

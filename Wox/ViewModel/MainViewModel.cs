@@ -53,14 +53,14 @@ namespace Wox.ViewModel
 
         #region Constructor
 
-        public MainViewModel(Settings settings, bool useUI = true)
+        public MainViewModel(bool useUI = true)
         {
             _saved = false;
             _queryTextBeforeLeaveResults = "";
             _queryText = "";
             _lastQuery = new Query();
 
-            _settings = settings;
+            _settings = Settings.Instance;
 
             _historyItemsStorage = new WoxJsonStorage<History>();
             _userSelectedRecordStorage = new WoxJsonStorage<UserSelectedRecord>();
@@ -74,9 +74,9 @@ namespace Wox.ViewModel
             History = new ResultsViewModel(_settings);
             _selectedResults = Results;
 
-            _translator = InternationalizationManager.Instance;
             if (useUI)
             {
+                _translator = InternationalizationManager.Instance;
                 InitializeKeyCommands();
                 RegisterResultsUpdatedEvent();
 
@@ -107,6 +107,7 @@ namespace Wox.ViewModel
                         updates.Add(tempUpdate);
                     }
 
+
                     UpdateResultView(updates);
 
                     DateTime currentTime = DateTime.Now;
@@ -134,16 +135,19 @@ namespace Wox.ViewModel
                 var plugin = (IResultUpdated)pair.Plugin;
                 plugin.ResultsUpdated += (s, e) =>
                 {
-                    CancellationToken token = _updateSource.Token;
-                    // todo async update don't need count down
-                    // init with 1 since every ResultsForUpdate will be countdown.signal()
-                    CountdownEvent countdown = new CountdownEvent(1);
-                    Task.Run(() =>
+                    if (!_updateSource.IsCancellationRequested)
                     {
-                        if (token.IsCancellationRequested) { return; }
-                        PluginManager.UpdatePluginMetadata(e.Results, pair.Metadata, e.Query);
-                        _resultsQueue.Add(new ResultsForUpdate(e.Results, pair.Metadata, e.Query, token, countdown));
-                    }, token);
+                        CancellationToken token = _updateSource.Token;
+                        // todo async update don't need count down
+                        // init with 1 since every ResultsForUpdate will be countdown.signal()
+                        CountdownEvent countdown = new CountdownEvent(1);
+                        Task.Run(() =>
+                        {
+                            if (token.IsCancellationRequested) { return; }
+                            PluginManager.UpdatePluginMetadata(e.Results, pair.Metadata, e.Query);
+                            _resultsQueue.Add(new ResultsForUpdate(e.Results, pair.Metadata, e.Query, token, countdown));
+                        }, token);
+                    }
                 };
             }
         }
@@ -464,7 +468,7 @@ namespace Wox.ViewModel
 
 
                         if (token.IsCancellationRequested) { return; }
-                        var plugins = PluginManager.ValidPluginsForQuery(query).Where(p => !p.Metadata.Disabled).ToList();
+                        var plugins = PluginManager.AllPlugins;
 
                         var option = new ParallelOptions()
                         {
@@ -489,6 +493,7 @@ namespace Wox.ViewModel
                                     countdown.Signal();
                                     return;
                                 }
+
                                 _resultsQueue.Add(new ResultsForUpdate(results, plugin.Metadata, query, token, countdown));
                             }, token).ContinueWith(ErrorReporting.UnhandledExceptionHandleTask, TaskContinuationOptions.OnlyOnFaulted);
                         }
@@ -525,7 +530,7 @@ namespace Wox.ViewModel
                     Results.Clear();
                     Results.Visbility = Visibility.Collapsed;
                 }
-            }, token);
+            }, token).ContinueWith(ErrorReporting.UnhandledExceptionHandleTask, TaskContinuationOptions.OnlyOnFaulted);
 
         }
 
@@ -748,7 +753,7 @@ namespace Wox.ViewModel
                     }
                     else if (!update.Metadata.KeepResultRawScore)
                     {
-                        result.Score += _userSelectedRecord.GetSelectedCount(result) * 5;
+                        result.Score += _userSelectedRecord.GetSelectedCount(result) * 10;
                     }
                     else
                     {

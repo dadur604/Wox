@@ -1,10 +1,12 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Wox.Infrastructure;
+using Wox.Infrastructure.Logger;
 
 namespace Wox.Plugin.ControlPanel
 {
@@ -15,25 +17,12 @@ namespace Wox.Plugin.ControlPanel
         private string iconFolder;
         private string fileType;
 
+        private static readonly NLog.Logger Logger = LogManager.GetCurrentClassLogger();
+
         public void Init(PluginInitContext context)
         {
             this.context = context;
-            controlPanelItems = ControlPanelList.Create(48);
-            iconFolder = Path.Combine(context.CurrentPluginMetadata.PluginDirectory, @"Images\ControlPanelIcons\");
-            fileType = ".bmp";
-
-            if (!Directory.Exists(iconFolder))
-            {
-                Directory.CreateDirectory(iconFolder);
-            }
-
-            foreach (ControlPanelItem item in controlPanelItems)
-            {
-                if (!File.Exists(iconFolder + item.GUID + fileType) && item.Icon != null)
-                {
-                    item.Icon.ToBitmap().Save(iconFolder + item.GUID + fileType);
-                }
-            }
+            controlPanelItems = ControlPanelList.Create();
         }
 
         public List<Result> Query(Query query)
@@ -43,40 +32,36 @@ namespace Wox.Plugin.ControlPanel
             foreach (var item in controlPanelItems)
             {
                 var titleMatch = StringMatcher.FuzzySearch(query.Search, item.LocalizedString);
-                var subTitleMatch = StringMatcher.FuzzySearch(query.Search, item.InfoTip);
-                
-                item.Score = Math.Max(titleMatch.Score, subTitleMatch.Score);
+
+                item.Score = titleMatch.Score;
                 if (item.Score > 0)
                 {
                     var result = new Result
                     {
                         Title = item.LocalizedString,
+                        TitleHighlightData = titleMatch.MatchData,
                         SubTitle = item.InfoTip,
                         Score = item.Score,
-                        IcoPath = Path.Combine(context.CurrentPluginMetadata.PluginDirectory,
-                            @"Images\\ControlPanelIcons\\" + item.GUID + fileType),
+                        IcoPath = item.IconPath,
                         Action = e =>
                         {
                             try
                             {
                                 Process.Start(item.ExecutablePath);
                             }
-                            catch (Exception)
+                            catch (Exception ex)
                             {
-                                //Silently Fail for now.. todo
+                                ex.Data.Add(nameof(item.LocalizedString), item.LocalizedString);
+                                ex.Data.Add(nameof(item.ExecutablePath), item.ExecutablePath);
+                                ex.Data.Add(nameof(item.IconPath), item.IconPath);
+                                ex.Data.Add(nameof(item.GUID), item.GUID);
+                                Logger.WoxError($"cannot start control panel item {item.ExecutablePath}", ex);
                             }
                             return true;
                         }
                     };
 
-                    if (item.Score == titleMatch.Score)
-                    {
-                        result.TitleHighlightData = titleMatch.MatchData;
-                    }
-                    else
-                    {
-                        result.SubTitleHighlightData = subTitleMatch.MatchData;
-                    }
+                    
 
                     results.Add(result);
                 }

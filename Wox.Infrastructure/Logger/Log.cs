@@ -2,10 +2,10 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
-using Mindscape.Raygun4Net;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using Sentry;
 using Wox.Infrastructure.Exception;
 using Wox.Infrastructure.UserSettings;
 
@@ -14,8 +14,9 @@ namespace Wox.Infrastructure.Logger
     public static class Log
     {
         public const string DirectoryName = "Logs";
-        private static RaygunClient _raygunClient = new RaygunClient("LG5MX0YYMCpCN2AtD0fdZw");
         public static string CurrentLogDirectory { get; }
+
+        private static string _woxLanguage = "not set";
 
         static Log()
         {
@@ -24,7 +25,7 @@ namespace Wox.Infrastructure.Logger
             {
                 Directory.CreateDirectory(CurrentLogDirectory);
             }
-            
+
             var configuration = new LoggingConfiguration();
             var fileTarget = new FileTarget()
             {
@@ -48,7 +49,7 @@ namespace Wox.Infrastructure.Logger
                 Debug.WriteLine($"DEBUG|{logger.Name}|{methodName}|{message}");
                 logger.Trace($"{methodName}|{message}");
             }
-            
+
         }
 
         public static void WoxDebug(this NLog.Logger logger, string message, [CallerMemberName] string methodName = "")
@@ -70,14 +71,57 @@ namespace Wox.Infrastructure.Logger
             logger.Error($"{methodName}|{message}");
         }
 
-        public static void WoxError(this NLog.Logger logger, string message, System.Exception exception, [CallerMemberName] string methodName = "")
+        public static void WoxError(
+            this NLog.Logger logger, string message, System.Exception exception, bool throwException = true, bool sendException = true, [CallerMemberName] string methodName = "")
         {
             Debug.WriteLine($"ERROR|{logger.Name}|{methodName}|{message}");
             logger.Error($"{methodName}|{message}|{ExceptionFormatter.FormattedException(exception)}");
-            _raygunClient.Send(exception);
+            if (sendException)
+            {
+                SendException(exception);
+            }
+
 #if DEBUG
-            throw exception;
+            if (throwException)
+            {
+                throw exception;
+            }
 #endif
         }
+
+        public static void updateSettingsInfo(string woxLanguage)
+        {
+            _woxLanguage = woxLanguage;
+
+            SentrySdk.ConfigureScope(scope =>
+            {
+                scope.SetTag("woxLanguage", _woxLanguage);
+            });
+        }
+
+        public static void SendException(System.Exception exception)
+        {
+#if !DEBUG
+            string pluginDiretoryKey = nameof(Plugin.PluginPair.Metadata.PluginDirectory);
+            if (exception.Data.Contains(pluginDiretoryKey))
+            {
+                string pluginDirectory = exception.Data[pluginDiretoryKey] as string;
+                bool debug = pluginDirectory.Contains(@"\Output\Release") || pluginDirectory.Contains(@"\Output\Release");
+                bool thirdParty = !pluginDirectory.Contains(Constant.ProgramDirectory);
+                if (debug || thirdParty)
+                {
+                    return;
+                }
+            }
+
+            SentrySdk.WithScope(scope =>
+            {
+                scope.Level = Sentry.Protocol.SentryLevel.Error;
+                SentrySdk.CaptureException(exception);
+            });
+#endif
+        }
+
     }
+
 }

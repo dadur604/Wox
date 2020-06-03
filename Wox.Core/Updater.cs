@@ -43,7 +43,7 @@ namespace Wox.Core
                     }
                     catch (Exception e) when (e is HttpRequestException || e is WebException || e is SocketException)
                     {
-                        Logger.WoxError($"Check your connection and proxy settings to api.github.com.", e);
+                        Logger.WoxError($"Check your connection and proxy settings to api.github.com. {e.Message}");
                         updateManager.Dispose();
                         return;
                     }
@@ -67,25 +67,14 @@ namespace Wox.Core
                     }
                     catch (Exception e) when (e is HttpRequestException || e is WebException || e is SocketException)
                     {
-                        Logger.WoxError($"Check your connection and proxy settings to github-cloud.s3.amazonaws.com.", e);
+                        Logger.WoxError($"Check your connection and proxy settings to github-cloud.s3.amazonaws.com. {e.Message}");
                         updateManager.Dispose();
                         return;
                     }
 
                     await updateManager.ApplyReleases(newUpdateInfo);
 
-                    if (DataLocation.PortableDataLocationInUse())
-                    {
-                        var targetDestination = updateManager.RootAppDirectory + $"\\app-{newReleaseVersion.ToString()}\\{DataLocation.PortableFolderName}";
-                        FilesFolders.Copy(DataLocation.PortableDataPath, targetDestination);
-                        if (!FilesFolders.VerifyBothFolderFilesEqual(DataLocation.PortableDataPath, targetDestination))
-                            MessageBox.Show(string.Format("Wox was not able to move your user profile data to the new update version. Please manually" +
-                                "move your profile data folder from {0} to {1}", DataLocation.PortableDataPath, targetDestination));
-                    }
-                    else
-                    {
-                        await updateManager.CreateUninstallerRegistryEntry();
-                    }
+                    await updateManager.CreateUninstallerRegistryEntry();
 
                     var newVersionTips = NewVersinoTips(newReleaseVersion.ToString());
 
@@ -97,7 +86,11 @@ namespace Wox.Core
             }
             catch (Exception e) when (e is HttpRequestException || e is WebException || e is SocketException)
             {
-                Logger.WoxError($"Please check your connection and proxy settings to api.github.com.", e);
+                Logger.WoxError($"Please check your connection and proxy settings {e.Message}");
+            }
+            catch (Exception e)
+            {
+                Logger.WoxError($"cannot check update {e.Message}");
             }
 
         }
@@ -124,11 +117,12 @@ namespace Wox.Core
             var json = await Http.Get(api);
 
             var releases = JsonConvert.DeserializeObject<List<GithubRelease>>(json).AsEnumerable();
-            if (!updateToPrereleases) {
+            if (!updateToPrereleases)
+            {
                 releases = releases.Where(r => !r.Prerelease);
             }
             var latest = releases.OrderByDescending(r => r.PublishedAt).First();
-            
+
             var latestUrl = latest.HtmlUrl.Replace("/tag/", "/download/");
 
             var client = new WebClient { Proxy = Http.WebProxy() };
